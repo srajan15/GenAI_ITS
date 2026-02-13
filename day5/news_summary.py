@@ -12,7 +12,7 @@ def extract_article_text(url):
     }
 
     response = requests.get(url, headers=headers, timeout=10)
-    response.raise_for_status()
+    
 
     soup = BeautifulSoup(response.text, "html.parser")
 
