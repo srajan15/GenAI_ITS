@@ -81,7 +81,7 @@ def process_url(url):
 # Gradio Interface
 # --------------------------------
 interface = gr.Interface(
-    fn=process_url,
+    fn=extract_website_text,
     inputs=gr.Textbox(label="Enter Website URL"),
     outputs=gr.Markdown(label="Website Summary"),
     title="Website Summarizer (Ollama)",
@@ -90,4 +90,4 @@ interface = gr.Interface(
 
 
 if __name__ == "__main__":
-    interface.launch()
+    interface.launch(inbrowser=True)

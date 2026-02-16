@@ -1,139 +1,209 @@
-import google.generativeai as genai
-from scrapper import fetch_website_contents, fetch_website_links
-import json
+from bs4 import BeautifulSoup
 import requests
-
-genai.configure(api_key="AIzaSyAN077TciCsd1Gf3t7Xfjd1d5ym7t1ZBKY")
-gemini_model = genai.GenerativeModel("gemini-2.5-flash-lite")
-
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "gemma3:270m"
+import json
+from urllib.parse import urljoin
+import google.generativeai as genai
 
 
+# ----------------------------
+# Configure Gemini
+# ----------------------------
 
-def generate_with_llm(prompt, model_choice):
-    if model_choice == "Ollama (gemma3:270m)":
-        return generate_with_ollama(prompt)
-    else:
-        return generate_with_gemini(prompt)
+genai.configure(api_key="YOUR_API_KEY")
+model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
-def generate_with_gemini(prompt):
-    response = gemini_model.generate_content(prompt)
-    return response.text
 
-def generate_with_ollama(prompt):
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False
-    }
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-    response = requests.post(OLLAMA_URL, json=payload, timeout=60)
 
-    if response.status_code == 200:
-        return response.json()["response"]
-    else:
-        print("Ollama error:", response.text)
+# ----------------------------
+# Fetch Website Text
+# ----------------------------
+
+def fetch_website_contents(url):
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException:
         return ""
 
-def filter_links(company_url, links, model_choice):
-  links = links[:25]
-  prompt = f"""
-  help me to analyze a company website here is the website url
-  {company_url} which have differnt links {links}
-  filter links that are relvant to brochure such as company services and about company etc 
-  strict rules:
-   - Return ONLY valid JSON. 
-   - Do not include markdown.
-   - Do not include explanation.
-   - Do not include backticks.
+    soup = BeautifulSoup(response.content, "html.parser")
 
-  Examples:
-  ["https://www.company_name/service.com", "https://www.company_name/about.com"]
+    title = soup.title.text.strip() if soup.title else ""
+
+    if soup.body:
+        for tag in soup.body(["script", "style", "img", "input"]):
+            tag.decompose()
+        text = soup.body.get_text(separator="\n", strip=True)
+    else:
+        text = ""
+
+    return (title + "\n\n" + text)[:2000]
+
+
+# ----------------------------
+# Fetch Website Links
+# ----------------------------
+
+def fetch_website_links(url):
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException:
+        return []
+
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    links = []
+    for anchor in soup.find_all("a", href=True):
+        absolute_url = urljoin(url, anchor["href"])
+        if absolute_url.startswith("http"):
+            links.append(absolute_url)
+
+    return list(set(links))
+
+
+# ----------------------------
+# Filter Relevant Links (LLM)
+# ----------------------------
+
+def filter_relevant_links(links):
+
+    prompt = f"""
+You are an AI web content analyst.
+
+Your task is to carefully evaluate a list of website URLs and select ONLY those URLs that contain meaningful company information suitable for generating a professional company sales brochure.
+
+--------------------------------------------------
+OBJECTIVE
+--------------------------------------------------
+From the given list of URLs, return ONLY the URLs that contain detailed company-related information that can help create a sales brochure.
+
+--------------------------------------------------
+INCLUDE URLs that likely contain:
+--------------------------------------------------
+- About Us / Company Overview pages
+- Products or Services pages
+- Solutions pages
+- Industry or domain expertise pages
+- Vision / Mission / Values pages
+- Leadership or Team pages
+- Company profile or brand story
+- Case studies or client success stories
+- Corporate information pages
+
+--------------------------------------------------
+EXCLUDE URLs that:
+--------------------------------------------------
+- Require login, authentication, or signup
+- Are careers or job listings
+- Are blog posts or news articles
+- Are press releases (unless clearly company overview focused)
+- Are contact-only pages
+- Are legal pages (privacy policy, terms, cookies)
+- Are dashboards or admin panels
+- Are APIs
+- Contain only forms or very little readable text
+- Contain anchors (#) or mailto links
+- Are social media links
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+1. Return ONLY a valid json array.
+2. Do NOT explain anything.
+3. Do NOT add commentary.
+4. Do NOT modify URLs.
+5. Do NOT add extra text.
+6. If no valid URLs exist, return an empty list: []
+7. The output MUST be valid JSON-compatible Python list format.
+
+--------------------------------------------------
+INPUT URL LIST:
+--------------------------------------------------
+{links}
+
+--------------------------------------------------
+OUTPUT FORMAT (STRICTLY FOLLOW):
+--------------------------------------------------
+["https://example.com/about", "https://example.com/services"]
+
+If no relevant links exist:
+[]
 """
-  res = generate_with_llm(prompt, model_choice)
-  raw_text = res.strip()
 
-  if raw_text.startswith("```"):
-    raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+    response = model.generate_content(prompt)
+    raw_text = response.text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+    start = raw_text.find("[")
+    end = raw_text.rfind("]")
+
+    if start != -1 and end != -1:
+        try:
+            return json.loads(raw_text[start:end + 1])
+        except json.JSONDecodeError:
+            return []
+
+    return []
 
 
-  try:
-      return json.loads(raw_text)
-      
-  except:
-      return []
-
-
+# ----------------------------
+# Collect Company Data
+# ----------------------------
 
 def collect_company_data(main_url, relevant_links):
-    """
-    Collects text from:
-    - Main website
-    - All AI-selected relevant pages
-    """
-
     combined_text = fetch_website_contents(main_url)
 
     for link in relevant_links:
-        try:
-            combined_text += "\n\n" + fetch_website_contents(link)
-        except Exception:
-            pass
+        combined_text += "\n\n" + fetch_website_contents(link)
 
-    return combined_text[:6_000]
+    return combined_text[:6000]
 
 
-# ======================================================
-# STEP 4 – Generate Sales Brochure (LLM Call #2)
-# ======================================================
+# ----------------------------
+# Generate Brochure
+# ----------------------------
 
-def generate_sales_brochure(company_data, model_choice):
-
-    """
-    Generates a professional sales brochure.
-    """
+def generate_sales_brochure(company_data):
 
     prompt = f"""
-You are a professional marketing copywriter.
-
-Using the information below, create a clear and
-persuasive sales brochure for potential clients
-or investors.
+Create a professional sales brochure using this information.
 
 Include:
 - Company overview
 - Products / services
-- Unique value proposition
+- Value proposition
 - Target customers
-- Why choose this company
+- Why choose the company
 
-Company information:
+Company data:
 {company_data}
 """
 
-    return generate_with_llm(prompt, model_choice)
+    response = model.generate_content(prompt)
+    return response.text
 
 
+# ----------------------------
+# Main
+# ----------------------------
 
-# ======================================================
-# STEP 5 – Orchestration (Main)
-# ======================================================
+def main():
+    company_url = "https://www.its.edu.in/"
 
-def fetch_brochure(company_url, model_choice):
-
-    print("Fetching links...")
     links = fetch_website_links(company_url)
+    relevant_links = filter_relevant_links(links)
 
-    print("Filtering relevant links with Gemini...")
-    relevant_links = filter_links(company_url, links, model_choice)
-
-    print("Collecting company data...")
     company_data = collect_company_data(company_url, relevant_links)
+    brochure = generate_sales_brochure(company_data)
 
-    print("Generating sales brochure...\n")
-    brochure = generate_sales_brochure(company_data, model_choice)
+    print(brochure)
 
-    print("========== SALES BROCHURE ==========\n")
-    return brochure
 
+if __name__ == "__main__":
+    main()

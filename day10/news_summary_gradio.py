@@ -46,7 +46,7 @@ school student can understand it.
 """
 
     payload = {
-        "model": "gemma3:270m",
+        "model": "gemma:2b",
         "prompt": prompt,
         "stream": False
     }
@@ -89,4 +89,4 @@ interface = gr.Interface(
 
 
 if __name__ == "__main__":
-    interface.launch()
+    interface.launch(inbrowser=True)
