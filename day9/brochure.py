@@ -7,7 +7,7 @@ genai.configure(api_key="api key")
 gemini_model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "gemma3:270m"
+OLLAMA_MODEL = "phi3"
 
 
 

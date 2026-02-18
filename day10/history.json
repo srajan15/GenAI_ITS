@@ -1,0 +1,24 @@
+[
+  {
+    "role": "user",
+    "metadata": null,
+    "content": [
+      {
+        "text": "hi there",
+        "type": "text"
+      }
+    ],
+    "options": null
+  },
+  {
+    "role": "assistant",
+    "metadata": null,
+    "content": [
+      {
+        "text": "You said hi there and the history is [] but I still say bananas",
+        "type": "text"
+      }
+    ],
+    "options": null
+  }
+]

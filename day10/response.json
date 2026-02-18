@@ -1,0 +1,21 @@
+{
+    "model": "gemma3:270m",
+    "created_at": "2026-02-17T18:01:02.0889658Z",
+    "done": true,
+    "done_reason": "stop",
+    "total_duration": 778106700,
+    "load_duration": 187561500,
+    "prompt_eval_count": 142,
+    "prompt_eval_duration": 42587300,
+    "eval_count": 28,
+    "eval_duration": 492934600,
+    "message": {
+        "role": "assistant",
+        "content": "Hello! Thank you for asking. We do have a great selection of hats, including several that are part of our sales event.\n",
+        "thinking": null,
+        "images": null,
+        "tool_name": null,
+        "tool_calls": null
+    },
+    "logprobs": null
+}
